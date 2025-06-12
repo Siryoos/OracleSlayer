@@ -1,0 +1,23 @@
+[project]
+name = "oradb-extractor"
+version = "1.0.0"
+description = "High-performance Oracle database extraction library"
+requires-python = ">=3.9"
+dependencies = [
+    "oracledb>=2.0.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "aiofiles>=23.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "pytest-benchmark", "ruff", "pyright"]
+monitoring = ["opentelemetry-api", "opentelemetry-sdk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pyright]
+pythonVersion = "3.9"
+typeCheckingMode = "strict"
