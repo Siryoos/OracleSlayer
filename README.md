@@ -2,8 +2,28 @@
 
 High performance Oracle extraction library.
 
-```python
-from oradb_extractor import extract
+## Installation
 
-df = asyncio.run(extract("SELECT * FROM dual", dsn="db", user="u", password="p"))
+```bash
+pip install oradb-extractor
 ```
+
+## Usage
+
+
+```python
+from oradb_extractor import extract_sync
+
+df = extract_sync(
+    "SELECT * FROM dual",
+    dsn="db",
+    user="u",
+    password="p",
+)
+```
+
+## Examples
+
+More real-world examples can be found in the [examples](examples/) directory.
+
+

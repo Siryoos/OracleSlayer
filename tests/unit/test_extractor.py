@@ -1,10 +1,9 @@
-import asyncio
 from unittest import mock
 
 import pytest
 
 from oradb_extractor.config import OracleConfig
-from oradb_extractor.oradb_extractor import OracleExtractor
+from oradb_extractor.oradb_extractor import OracleExtractor, extract_sync
 
 
 class DummyPool:
@@ -40,4 +39,16 @@ async def test_extract_to_dataframe(monkeypatch):
         ) as mocked:
             df = await extractor.extract_to_dataframe("SELECT 1 FROM dual")
             assert mocked.called
-            assert not df is None
+            assert df is not None
+
+
+def test_extract_sync(monkeypatch):
+    async def fake_extract(*args, **kwargs):
+        return [1]
+
+    monkeypatch.setattr(
+        "oradb_extractor.oradb_extractor.extract",
+        fake_extract,
+    )
+    result = extract_sync("SELECT 1 FROM dual", dsn="x", user="u", password="p")
+    assert result == [1]

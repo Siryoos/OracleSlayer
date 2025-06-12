@@ -16,15 +16,17 @@ from .base import BaseExtractor
 class StreamingExtractor(BaseExtractor):
     """Stream results in chunks."""
 
-    def __init__(self, pool: AsyncPool, arraysize: int) -> None:
+    def __init__(self, pool: AsyncPool, arraysize: int, prefetchrows: int) -> None:
         self.pool = pool
         self.arraysize = arraysize
+        self.prefetchrows = prefetchrows
 
     async def execute(self, query: str, params: Optional[Iterable] = None) -> Iterable:
         conn = await self.pool.acquire()
         try:
             cursor = await conn.cursor()
             cursor.arraysize = self.arraysize
+            cursor.prefetchrows = self.prefetchrows
             await cursor.execute(query, params or [])
             while True:
                 rows = await cursor.fetchmany()
@@ -48,5 +50,16 @@ class StreamingExtractor(BaseExtractor):
     async def extract_to_parquet(
         self, query: str, output_path: str, params: Optional[Iterable] = None
     ) -> None:
-        table = pa.Table.from_pandas(await self.extract_to_dataframe(query, params))
-        pq.write_table(table, output_path)
+        first_batch = True
+        writer = None
+        async for row in self.execute(query, params):
+            if first_batch:
+                writer = pq.ParquetWriter(
+                    output_path,
+                    pa.Table.from_pylist([row]).schema,
+                )
+                first_batch = False
+            table = pa.Table.from_pylist([row])
+            writer.write_table(table)
+        if writer:
+            writer.close()

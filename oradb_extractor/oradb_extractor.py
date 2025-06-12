@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 from typing import Iterable, Optional
 
-import oracledb
 import pandas as pd
 
 from .config import OracleConfig
@@ -40,7 +39,11 @@ class OracleExtractor:
     ) -> pd.DataFrame:
         if not self._pool:
             raise ExtractionError("Extractor not initialized")
-        extractor = StreamingExtractor(self._pool, arraysize=self.config.arraysize)
+        extractor = StreamingExtractor(
+            self._pool,
+            arraysize=self.config.arraysize,
+            prefetchrows=self.config.prefetchrows,
+        )
         return await extractor.extract_to_dataframe(query, params)
 
     async def extract_to_parquet(
@@ -48,7 +51,11 @@ class OracleExtractor:
     ) -> None:
         if not self._pool:
             raise ExtractionError("Extractor not initialized")
-        extractor = StreamingExtractor(self._pool, arraysize=self.config.arraysize)
+        extractor = StreamingExtractor(
+            self._pool,
+            arraysize=self.config.arraysize,
+            prefetchrows=self.config.prefetchrows,
+        )
         await extractor.extract_to_parquet(query, output_path, params)
 
 
@@ -66,3 +73,14 @@ async def extract(
             setattr(config, key, value)
     async with OracleExtractor(config) as extractor:
         return await extractor.extract_to_dataframe(query)
+
+
+def extract_sync(
+    query: str,
+    dsn: str,
+    user: str,
+    password: str,
+    **kwargs,
+) -> pd.DataFrame:
+    """Synchronous wrapper around :func:`extract`."""
+    return asyncio.run(extract(query, dsn, user, password, **kwargs))
