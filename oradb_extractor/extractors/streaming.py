@@ -7,6 +7,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+import asyncio
 from ..errors import QueryError
 from ..pool import AsyncPool
 
@@ -24,12 +25,12 @@ class StreamingExtractor(BaseExtractor):
     async def execute(self, query: str, params: Optional[Iterable] = None) -> Iterable:
         conn = await self.pool.acquire()
         try:
-            cursor = await conn.cursor()
+            cursor = await asyncio.to_thread(conn.cursor)
             cursor.arraysize = self.arraysize
             cursor.prefetchrows = self.prefetchrows
-            await cursor.execute(query, params or [])
+            await asyncio.to_thread(cursor.execute, query, params or [])
             while True:
-                rows = await cursor.fetchmany()
+                rows = await asyncio.to_thread(cursor.fetchmany)
                 if not rows:
                     break
                 for row in rows:

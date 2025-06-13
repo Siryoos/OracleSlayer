@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from typing import Iterable, List, Optional
 
-import oracledb
+import cx_Oracle
 
 from .config import OracleConfig
 from .errors import ConnectionError
@@ -12,11 +12,11 @@ from .utils.monitoring import init_metrics
 
 
 class AsyncPool:
-    """Async wrapper around oracledb connection pool."""
+    """Async wrapper around cx_Oracle session pool."""
 
     def __init__(self, config: OracleConfig) -> None:
         self.config = config
-        self._pool: Optional[oracledb.ConnectionPool] = None
+        self._pool: Optional[cx_Oracle.SessionPool] = None
         self._failure_count = 0
         self._circuit_open = False
         self._meter = init_metrics()
@@ -26,16 +26,17 @@ class AsyncPool:
         """Create connection pool."""
         self.config.validate()
         try:
-            self._pool = await oracledb.create_pool(
-                dsn=self.config.dsn,
+            self._pool = await asyncio.to_thread(
+                cx_Oracle.SessionPool,
                 user=self.config.user,
                 password=self.config.password,
+                dsn=self.config.dsn,
                 min=self.config.pool_min,
                 max=self.config.pool_max,
                 increment=self.config.pool_increment,
                 timeout=self.config.pool_timeout,
-                getmode=oracledb.POOL_GETMODE_WAIT,
-                wait_timeout=self.config.pool_timeout,
+                getmode=cx_Oracle.SPOOL_ATTRVAL_WAIT,
+                threaded=True,
                 stmtcachesize=self.config.stmtcachesize,
             )
             if self._meter:
@@ -46,7 +47,7 @@ class AsyncPool:
         except Exception as exc:  # pragma: no cover - thin wrapper
             raise ConnectionError(str(exc)) from exc
 
-    async def acquire(self) -> oracledb.Connection:
+    async def acquire(self) -> cx_Oracle.Connection:
         if self._circuit_open:
             raise ConnectionError("Connection circuit open")
         if not self._pool:
@@ -54,7 +55,7 @@ class AsyncPool:
         delay = self.config.retry_delay
         for attempt in range(self.config.max_retries):
             try:
-                conn = await self._pool.acquire()
+                conn = await asyncio.to_thread(self._pool.acquire)
                 self._failure_count = 0
                 return conn
             except Exception as exc:  # pragma: no cover - thin wrapper
@@ -65,9 +66,9 @@ class AsyncPool:
                 await asyncio.sleep(delay)
                 delay *= self.config.retry_backoff
 
-    async def release(self, connection: oracledb.Connection) -> None:
+    async def release(self, connection: cx_Oracle.Connection) -> None:
         if self._pool:
-            await self._pool.release(connection)
+            await asyncio.to_thread(self._pool.release, connection)
 
     async def get_stats(self) -> dict:
         if not self._pool:
@@ -83,7 +84,7 @@ class AsyncPool:
 
     async def close(self) -> None:
         if self._pool:
-            await self._pool.close()
+            await asyncio.to_thread(self._pool.close)
 
 
 async def create_pool(config: OracleConfig) -> AsyncPool:
